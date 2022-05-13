@@ -15,6 +15,7 @@ export interface fieldConstrustPara {
 
 export interface cellsStepContent {
     timeStep: number,
+    timeIndex:number,
     props: CFDCellParmaters[]
     /*speed?: number[][],
     temp?: number[],*/
@@ -135,7 +136,7 @@ export class CFDOpenFoam {
         return true;
     }
 
-    public ParserInitJSON(content: object): Promise<CFDOpenFoam> {
+    public ParserInitJSON(content: object,maxTimeIndex:number,indexSkip:number = 0): Promise<CFDOpenFoam> {
         return new Promise((solv, rej) => {
             if (!content["Attributes"] && !content["TimeStep"]) {
                 console.debug(`Missing Paramaters...`);
@@ -149,11 +150,25 @@ export class CFDOpenFoam {
             if (content["TimeStep"]) {
                 this.cellsContentTimeStepArray = this.cellsContentTimeStepArray || new Array<cellsStepContent>();
                 this.cellsContentTimeStepArray.length = 0;
-                content["TimeStep"].map(
+                let indexSkipCount = 0;
+                let indexCount = 0;
+
+                content["TimeStep"].every( (timestep) =>{
+                    if(this.cellsContentTimeStepArray.length>=maxTimeIndex)
+                        return false;
+                    indexSkipCount++;
+                    if(indexSkipCount>indexSkip){
+                        indexSkipCount = 0;
+                        this._sortOutCellsStep(+timestep,indexCount);
+                    }
+                    indexCount++;
+                    return true;
+                });
+                /*map(
                     (timestep) => this._sortOutCellsStep(+timestep)
-                );
+                );*/
             }
-            console.debug(`atttribte:${this.cellProperties}  TimeStep:${this.cellsContentTimeStepArray.length}`);
+            console.debug(`Atttribtes:${this.cellProperties}  TimeStep:${this.cellsContentTimeStepArray.length}`);
             solv(this);
             //return this;
         });
@@ -306,11 +321,11 @@ export class CFDOpenFoam {
             );
             curPointsArray.push(point);
         });
-
+        console.debug(`Created Points : ${curPointsArray.length}`);
         return true;
     }
 
-    private _sortOutCellsStep(timeStep: number): cellsStepContent {
+    private _sortOutCellsStep(timeStep: number,timeindex:number = 0): cellsStepContent {
         if (!this.cellsContentTimeStepArray)
             this.cellsContentTimeStepArray = new Array<cellsStepContent>();
 
@@ -325,11 +340,11 @@ export class CFDOpenFoam {
             }
             if (cells.timeStep < timeStep)
                 insertindex++;
-
         }
         if (!newCellsStepContent) {
             newCellsStepContent = {
                 timeStep: timeStep,
+                timeIndex: timeindex,
                 props: [],
             }
             // need sorting here......
@@ -432,7 +447,7 @@ export class CFDOpenFoam {
         if (!regex.test(buf))
             return false;
 
-        let newCellsStepContent = this._sortOutCellsStep(Number(timeStep));
+        let newCellsStepContent = this._sortOutCellsStep(Number(timeStep),0); // wait to fixe 0....
 
         //newCellsStepContent.speed = new Array<Array<number>>();
         // let newCellsStepContent: cellsStepContent = {
@@ -490,6 +505,7 @@ export class CFDOpenFoam {
             }
         }
         );
+        console.debug(`Created Owner : ${fownerlist.length}`);
         return true;
     }
     public ParseForNeighbour(buf: string): boolean {
